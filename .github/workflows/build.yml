@@ -24,11 +24,48 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      - name: Find Android project
+        run: |
+          if [ -f "settings.gradle.kts" ]; then
+            echo "Android project found in repository root"
+            echo "PROJECT_DIR=." >> "$GITHUB_ENV"
+          else
+            ZIP_FILE=$(find . -maxdepth 2 -type f -name "JeniEnglishCoach*.zip" | head -n 1)
+
+            if [ -z "$ZIP_FILE" ]; then
+              echo "Android project ZIP was not found."
+              echo "Repository contents:"
+              find . -maxdepth 3 -type f
+              exit 1
+            fi
+
+            echo "Found project ZIP: $ZIP_FILE"
+            mkdir -p android-project
+            unzip -q "$ZIP_FILE" -d android-project
+
+            echo "Extracted files:"
+            find android-project -maxdepth 3 -type f
+
+            if [ -f "android-project/settings.gradle.kts" ]; then
+              echo "PROJECT_DIR=android-project" >> "$GITHUB_ENV"
+            else
+              PROJECT=$(find android-project -name settings.gradle.kts -type f | head -n 1 | xargs dirname)
+
+              if [ -z "$PROJECT" ]; then
+                echo "settings.gradle.kts was not found."
+                exit 1
+              fi
+
+              echo "PROJECT_DIR=$PROJECT" >> "$GITHUB_ENV"
+            fi
+          fi
+
       - name: Build APK
         run: gradle :app:assembleDebug
+        working-directory: ${{ env.PROJECT_DIR }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: JeniEnglishCoach-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
